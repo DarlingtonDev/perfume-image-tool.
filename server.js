@@ -69,7 +69,7 @@ async function searchProduct(p) {
   return p.results;
 }
 
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function requestGemini(model, prompt) {
@@ -126,30 +126,33 @@ async function suggestCanonicalTitle(p) {
     `Google Images result evidence:\n${evidence || "No image result evidence available."}`
   ].join("\n\n");
 
-  const attempts = [
-    { model: GEMINI_MODELS[0], wait: 1500 },
-    { model: GEMINI_MODELS[0], wait: 3500 },
-    { model: GEMINI_MODELS[1], wait: 2500 },
-    { model: GEMINI_MODELS[1], wait: 4500 }
-  ];
+  const retryDelays = [0, 2000, 4000, 6000];
   let lastError;
 
-  for (let i = 0; i < attempts.length; i++) {
-    if (i > 0) await sleep(attempts[i].wait);
+  for (const delay of retryDelays) {
+    if (delay > 0) await sleep(delay);
+
     try {
-      return await requestGemini(attempts[i].model, prompt);
+      return await requestGemini(GEMINI_MODEL, prompt);
     } catch (error) {
       lastError = error;
-      const temporary = error.status === 429 || error.status === 500 ||
-        error.status === 502 || error.status === 503 || error.status === 504 ||
-        error.apiStatus === "RESOURCE_EXHAUSTED" || error.apiStatus === "UNAVAILABLE";
+
+      const temporary =
+        error.status === 429 ||
+        error.status === 500 ||
+        error.status === 502 ||
+        error.status === 503 ||
+        error.status === 504 ||
+        error.apiStatus === "RESOURCE_EXHAUSTED" ||
+        error.apiStatus === "UNAVAILABLE";
+
       if (!temporary) break;
     }
   }
-  throw lastError || new Error("Gemini could not generate a title.");
-}
 
-app.get("/", (req, res) => {
+  throw lastError || new Error("Gemini could not generate a title.");
+
+  app.get("/", (req, res) => {
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
